@@ -1,0 +1,86 @@
+name: Build Salseo Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-android:
+    runs-on: windows-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Comprobar que existe Salseo.zip
+        shell: pwsh
+        run: |
+          if (!(Test-Path "Salseo.zip")) {
+            Write-Error "No se encontró Salseo.zip en la raíz del repositorio."
+            exit 1
+          }
+
+      - name: Descomprimir Salseo.zip
+        shell: pwsh
+        run: |
+          Expand-Archive -Path "Salseo.zip" -DestinationPath "Salseo_build" -Force
+
+      - name: Detectar carpeta del proyecto
+        shell: pwsh
+        run: |
+          $possible = Get-ChildItem -Path "Salseo_build" -Directory | Select-Object -First 1
+
+          if (Test-Path "Salseo_build\package.json") {
+            "PROJECT_DIR=Salseo_build" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+          elseif ($possible -and (Test-Path "$($possible.FullName)\package.json")) {
+            "PROJECT_DIR=$($possible.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+          else {
+            Write-Error "No se encontró package.json dentro de Salseo.zip."
+            exit 1
+          }
+
+      - name: Instalar dependencias
+        shell: pwsh
+        run: |
+          cd "$env:PROJECT_DIR"
+          npm install
+
+      - name: Compilar web
+        shell: pwsh
+        run: |
+          cd "$env:PROJECT_DIR"
+          npm run build
+
+      - name: Sincronizar Capacitor Android
+        shell: pwsh
+        run: |
+          cd "$env:PROJECT_DIR"
+          npx cap sync android
+
+      - name: Compilar APK Debug
+        shell: pwsh
+        run: |
+          cd "$env:PROJECT_DIR\android"
+          .\gradlew.bat clean assembleDebug
+
+      - name: Subir APK como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: Salseo-debug-apk
+          path: ${{ env.PROJECT_DIR }}\android\app\build\outputs\apk\debug\app-debug.apk
