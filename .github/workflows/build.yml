@@ -1,0 +1,93 @@
+name: build-android
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Salseo.zip'
+      - '.github/workflows/build-android.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Comprobar que existe Salseo.zip
+        run: |
+          test -f Salseo.zip
+          ls -lh Salseo.zip
+
+      - name: Descomprimir Salseo.zip
+        run: |
+          rm -rf Salseo_build
+          mkdir -p Salseo_build
+          unzip -q Salseo.zip -d Salseo_build
+
+      - name: Detectar carpeta del proyecto
+        run: |
+          PROJECT_DIR="$(find Salseo_build -name package.json -not -path '*/node_modules/*' -print -quit | xargs dirname)"
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "No se encontró package.json dentro de Salseo.zip"
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Proyecto detectado en: $PROJECT_DIR"
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Configurar Node.js estable
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Mostrar versiones
+        run: |
+          node --version
+          npm --version
+          java -version
+
+      - name: Fijar npm estable y limpiar caché
+        run: |
+          npm install -g npm@10.9.2
+          npm --version
+          npm cache clean --force
+
+      - name: Instalar dependencias
+        run: |
+          cd "$PROJECT_DIR"
+          rm -rf node_modules
+          npm config set audit false
+          npm config set fund false
+          npm ci --prefer-online --no-audit --no-fund || npm install --legacy-peer-deps --prefer-online --no-audit --no-fund
+
+      - name: Compilar web
+        run: |
+          cd "$PROJECT_DIR"
+          npm run build
+
+      - name: Sincronizar Capacitor Android
+        run: |
+          cd "$PROJECT_DIR"
+          npx cap sync android
+
+      - name: Compilar APK Debug
+        run: |
+          cd "$PROJECT_DIR/android"
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Subir APK como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: Salseo-debug-apk
+          path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
