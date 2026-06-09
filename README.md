@@ -14,4 +14,6 @@ El usuario puede cerrar sesión o eliminar su cuenta desde los ajustes de la apl
 
 Salseo aplica reglas de seguridad en Firebase para limitar el acceso a los datos y evitar modificaciones no autorizadas. Aun así, se recomienda no publicar información privada, sensible o confidencial dentro de la aplicación.
 
-El uso de Salseo implica aceptar esta política de privacidad y seguridad.
+_El uso de Salseo implica aceptar esta política de privacidad y seguridad._
+
+**En siguientes actualizaciones, al eliminar la cuenta se borrará absolutamente todo lo publicado por el usuario, para ello modificando Salseo.**
